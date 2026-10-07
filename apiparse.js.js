@@ -32,11 +32,11 @@ export default async function handler(req, res) {
       }]
     };
 
-    // Google API 目前最新建議使用的模型清單（優先使用 3.1 最新版）
+    // Google 官方 2026 年最新支援模型名單 (避開已停用的舊版模型)
     const models = [
       'gemini-3.1-pro-preview',
-      'gemini-3-flash-preview',
-      'gemini-2.5-flash'
+      'gemini-3.5-flash',
+      'gemini-3-flash-preview'
     ];
     let lastError = null;
 
