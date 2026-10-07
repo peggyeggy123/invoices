@@ -5,7 +5,7 @@ export default async function handler(req, res) {
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return res.status(500).json({ error: '伺服器未設定 GEMINI_API_KEY 環境變數' });
+    return res.status(500).json({ error: '伺服器未設定 GEMINI_API_KEY 環境變數，請至 Vercel Settings 設定' });
   }
 
   try {
@@ -32,7 +32,12 @@ export default async function handler(req, res) {
       }]
     };
 
-    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    // Google API 目前最新建議使用的模型清單（優先使用 3.1 最新版）
+    const models = [
+      'gemini-3.1-pro-preview',
+      'gemini-3-flash-preview',
+      'gemini-2.5-flash'
+    ];
     let lastError = null;
 
     for (let model of models) {
