@@ -32,9 +32,8 @@ export default async function handler(req, res) {
       }]
     };
 
-    // Google 提示最新指定的官方模型 (排除所有已停用的 gemini-2.5/1.5 舊模型)
-    const targetModel = 'gemini-3.1-pro-preview';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+    // 使用 Google 官方最穩定且相容性最高的標準模型
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -44,12 +43,13 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      throw new Error(`[${targetModel}] 呼叫失敗 (${response.status}): ${errData.error?.message || response.statusText}`);
+      throw new Error(`Google API 回傳錯誤 (${response.status}): ${errData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
     let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     
+    // 清理 JSON 字串
     const jsonStart = rawText.indexOf('{');
     const jsonEnd = rawText.lastIndexOf('}');
     if (jsonStart !== -1 && jsonEnd !== -1) {
