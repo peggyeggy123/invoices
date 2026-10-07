@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>製造業進項發票自動辨識系統</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tesseract.js for OCR -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <!-- SheetJS for Exporting Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-12">
+  <div class="max-w-4xl mx-auto px-4 py-8">
+    <header class="mb-8 text-center sm:text-left border-b border-slate-200 pb-6">
+      <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 flex items-center justify-center sm:justify-start gap-3">
+        <i data-lucide="receipt" class="w-8 h-8 text-blue-600"></i>
+        進項發票自動掃描與對帳系統
+      </h1>
+      <p class="text-sm text-slate-500 mt-2">手機拍攝發票照片 ➔ 自動抓取欄位 ➔ 一鍵匯出 Excel 表格</p>
+    </header>
+
+    <!-- 操作說明區塊 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
+        <div class="p-2 bg-blue-50 text-blue-600 rounded-lg"><i data-lucide="camera" class="w-5 h-5"></i></div>
+        <div>
+          <h3 class="font-semibold text-sm">1. 批次拍照/上傳</h3>
+          <p class="text-xs text-slate-500 mt-1">可同時選擇或拍攝多張發票照片</p>
+        </div>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
+        <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><i data-lucide="cpu" class="w-5 h-5"></i></div>
+        <div>
+          <h3 class="font-semibold text-sm">2. AI OCR 自動解析</h3>
+          <p class="text-xs text-slate-500 mt-1">自動辨識號碼、日期、廠商與金額</p>
+        </div>
+      </div>
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-start gap-3">
+        <div class="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><i data-lucide="file-spreadsheet" class="w-5 h-5"></i></div>
+        <div>
+          <h3 class="font-semibold text-sm">3. 匯出 Excel</h3>
+          <p class="text-xs text-slate-500 mt-1">確認欄位無誤後匯出 `.xlsx` 檔案</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 上傳按鈕 -->
+    <div class="bg-white rounded-2xl border-2 border-dashed border-blue-200 p-8 text-center mb-8 hover:border-blue-400 transition-colors">
+      <input type="file" id="fileInput" multiple accept="image/*" capture="environment" class="hidden">
+      <label for="fileInput" class="cursor-pointer flex flex-col items-center justify-center gap-3">
+        <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center shadow-inner">
+          <i data-lucide="upload-cloud" class="w-8 h-8"></i>
+        </div>
+        <div>
+          <span class="text-base font-semibold text-blue-600">點擊拍照或上傳發票照片</span>
+          <p class="text-xs text-slate-400 mt-1">支援 JPG, PNG 格式（可一次選擇多張）</p>
+        </div>
+      </label>
+    </div>
+
+    <!-- 辨識狀態進度條 -->
+    <div id="progressContainer" class="hidden mb-8 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+      <div class="flex justify-between items-center mb-2">
+        <span id="progressText" class="text-sm font-medium text-slate-700">正在處理照片...</span>
+        <span id="progressPercent" class="text-xs font-semibold text-blue-600">0%</span>
+      </div>
+      <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+        <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full w-0 transition-all duration-300"></div>
+      </div>
+    </div>
+
+    <!-- 結果表格 -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+      <div class="p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900">發票明細表預覽</h2>
+          <p class="text-xs text-slate-500">可在表格內直接修正文字，確定無誤後下載</p>
+        </div>
+        <button id="exportBtn" onclick="exportToExcel()" disabled class="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all">
+          <i data-lucide="download" class="w-4 h-4"></i>
+          下載 Excel 表格 (.xlsx)
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left border-collapse">
+          <thead class="text-xs text-slate-700 uppercase bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th class="px-4 py-3 min-w-[100px]">日期</th>
+              <th class="px-4 py-3 min-w-[120px]">發票號碼</th>
+              <th class="px-4 py-3 min-w-[140px]">品名</th>
+              <th class="px-4 py-3 min-w-[80px]">數量</th>
+              <th class="px-4 py-3 min-w-[90px]">單價</th>
+              <th class="px-4 py-3 min-w-[90px]">金額</th>
+              <th class="px-4 py-3 min-w-[80px]">稅額</th>
+              <th class="px-4 py-3 min-w-[90px]">總額</th>
+              <th class="px-4 py-3 min-w-[150px]">開票廠商</th>
+              <th class="px-4 py-3 min-w-[60px] text-center">操作</th>
+            </tr>
+          </thead>
+          <tbody id="invoiceTableBody">
+            <tr id="emptyRow">
+              <td colspan="10" class="text-center py-12 text-slate-400">
+                <i data-lucide="file-text" class="w-10 h-10 mx-auto mb-2 stroke-1"></i>
+                目前尚未上傳任何發票，請點擊上方按鈕開始拍照辨識
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+    let invoiceData = [];
+
+    document.getElementById('fileInput').addEventListener('change', async function(e) {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+
+      const progressContainer = document.getElementById('progressContainer');
+      const progressBar = document.getElementById('progressBar');
+      const progressText = document.getElementById('progressText');
+      const progressPercent = document.getElementById('progressPercent');
+
+      progressContainer.classList.remove('hidden');
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const percent = Math.round(((i) / files.length) * 100);
+        progressText.innerText = `正在辨識第 (${i + 1}/${files.length}) 張: ${file.name}`;
+        progressBar.style.width = `${percent}%`;
+        progressPercent.innerText = `${percent}%`;
+
+        try {
+          const result = await Tesseract.recognize(file, 'chi_tra+eng', {
+            logger: m => {}
+          });
+          const parsed = parseOCRText(result.data.text);
+          invoiceData.push(parsed);
+        } catch (err) {
+          console.error(err);
+        }
+      }
+
+      progressBar.style.width = '100%';
+      progressPercent.innerText = '100%';
+      progressText.innerText = '辨識完成！';
+
+      renderTable();
+      document.getElementById('exportBtn').disabled = false;
+      setTimeout(() => progressContainer.classList.add('hidden'), 2000);
+    });
+
+    function parseOCRText(text) {
+      let invNum = "未辨識";
+      let date = "未辨識";
+      let vendor = "未辨識";
+      let item = "貨品/零組件";
+      let total = 0;
+
+      const invMatch = text.match(/([A-Za-z]{2})[\s\-]?(\d{8})/);
+      if (invMatch) invNum = `${invMatch[1].toUpperCase()}-${invMatch[2]}`;
+
+      const dateMatch = text.match(/(\d{3,4}[\/\.-]\d{1,2}[\/\.-]\d{1,2})/);
+      if (dateMatch) date = dateMatch[1];
+
+      const lines = text.split('\n');
+      for (let line of lines) {
+        if (/股份有限公司|有限公司|實業|企業|工業/.test(line)) {
+          vendor = line.trim();
+          break;
+        }
+      }
+
+      const nums = text.match(/\b\d{1,3}(,\d{3})*\b|\b\d+\b/g);
+      if (nums) {
+        const cleanNums = nums.map(n => parseInt(n.replace(/,/g, ''))).filter(n => n > 10 && n < 1000000);
+        if (cleanNums.length > 0) total = Math.max(...cleanNums);
+      }
+
+      const amount = Math.round(total / 1.05);
+      const tax = total - amount;
+
+      return {
+        date,
+        invNum,
+        item,
+        qty: 1,
+        unitPrice: amount,
+        amount,
+        tax,
+        total,
+        vendor
+      };
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('invoiceTableBody');
+      tbody.innerHTML = '';
+
+      if (invoiceData.length === 0) {
+        tbody.innerHTML = `<tr id="emptyRow"><td colspan="10" class="text-center py-12 text-slate-400">目前尚未上傳任何發票</td></tr>`;
+        return;
+      }
+
+      invoiceData.forEach((row, idx) => {
+        const tr = document.createElement('tr');
+        tr.className = "border-b border-slate-100 hover:bg-slate-50/80 transition-colors";
+        tr.innerHTML = `
+          <td class="p-2"><input type="text" value="${row.date}" onchange="updateData(${idx}, 'date', this.value)" class="w-full bg-transparent border border-slate-200 rounded px-2 py-1 text-xs"></td>
+          <td class="p-2"><input type="text" value="${row.invNum}" onchange="updateData(${idx}, 'invNum', this.value)" class="w-full bg-transparent border border-slate-200 rounded px-2 py-1 text-xs font-mono"></td>
+          <td class="p-2"><input type="text" value="${row.item}" onchange="updateData(${idx}, 'item', this.value)" class="w-full bg-transparent border border-slate-200 rounded px-2 py-1 text-xs"></td>
+          <td class="p-2"><input type="number" value="${row.qty}" onchange="updateData(${idx}, 'qty', this.value)" class="w-full bg-transparent border border-slate-200 rounded px-2 py-1 text-xs"></td>
+          <td class="p-2"><input type="number" value="${row.unitPrice}" onchange="updateData(${idx}, 'unitPrice', this.value)" class="w-full bg-transparent border border-slate-200 rounded px-2 py-1 text-xs"></td>
+          <td class="p-2"><input type="number" value="${row.amount}" onchange="updateData(${idx}, 'amount', this.value)" class="w-full bg-transparent border border-slate-200 rounded px-2 py-1 text-xs"></td>
+          <td class="p-2"><input type="number" value="${row.tax}" onchange="updateData(${idx}, 'tax', this.value)" class="w-full bg-transparent border border-slate-200 rounded px-2 py-1 text-xs"></td>
+          <td class="p-2"><input type="number" value="${row.total}" onchange="updateData(${idx}, 'total', this.value)" class="w-full bg-transparent border border-slate-200 rounded px-2 py-1 text-xs font-semibold text-slate-900"></td>
+          <td class="p-2"><input type="text" value="${row.vendor}" onchange="updateData(${idx}, 'vendor', this.value)" class="w-full bg-transparent border border-slate-200 rounded px-2 py-1 text-xs"></td>
+          <td class="p-2 text-center">
+            <button onclick="deleteRow(${idx})" class="text-rose-500 hover:text-rose-700 p-1 rounded hover:bg-rose-50">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+      lucide.createIcons();
+    }
+
+    function updateData(idx, field, val) {
+      invoiceData[idx][field] = val;
+    }
+
+    function deleteRow(idx) {
+      invoiceData.splice(idx, 1);
+      renderTable();
+      if (invoiceData.length === 0) {
+        document.getElementById('exportBtn').disabled = true;
+      }
+    }
+
+    function exportToExcel() {
+      if (invoiceData.length === 0) return;
+
+      const excelHeaderData = invoiceData.map(item => ({
+        "日期": item.date,
+        "發票號碼": item.invNum,
+        "品名": item.item,
+        "數量": Number(item.qty),
+        "單價": Number(item.unitPrice),
+        "金額": Number(item.amount),
+        "稅額": Number(item.tax),
+        "總額": Number(item.total),
+        "開票廠商": item.vendor
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(excelHeaderData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "進項發票明細");
+
+      XLSX.writeFile(workbook, "進項發票明細表.xlsx");
+    }
+  </script>
+</body>
+</html>
