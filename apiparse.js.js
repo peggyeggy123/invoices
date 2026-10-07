@@ -23,33 +23,6 @@ export default async function handler(req, res) {
   "vendor": "廠商名稱"
 }`;
 
-    // 步驟 1: 動態向 Google 查詢此 API Key 目前所有可用的模型
-    const listModelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-    const listRes = await fetch(listModelsUrl);
-    if (!listRes.ok) {
-      const errData = await listRes.json().catch(() => ({}));
-      throw new Error(`無法取得模型清單: ${errData.error?.message || listRes.statusText}，請檢查 API Key 是否正確。`);
-    }
-
-    const listData = await listRes.json();
-    const availableModels = listData.models || [];
-    
-    // 找出支援 generateContent 的模型（優先選擇名稱含有 flash 或 pro 的模型）
-    const validModel = availableModels.find(m => 
-      m.supportedGenerationMethods && 
-      m.supportedGenerationMethods.includes('generateContent') &&
-      !m.name.includes('embedding') &&
-      !m.name.includes('imagen')
-    );
-
-    if (!validModel) {
-      throw new Error("此 API Key 目前沒有可用於生成內容的 Gemini 模型。");
-    }
-
-    // 格式範例: "models/gemini-3.5-flash" ➔ 取出 "gemini-3.5-flash"
-    const targetModelName = validModel.name.replace('models/', '');
-
-    // 步驟 2: 使用動態取得的最佳模型名稱發送辨識請求
     const payload = {
       contents: [{
         parts: [
@@ -59,8 +32,11 @@ export default async function handler(req, res) {
       }]
     };
 
-    const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModelName}:generateContent?key=${apiKey}`;
-    const response = await fetch(generateUrl, {
+    // Google 提示最新指定的官方模型 (排除所有已停用的 gemini-2.5/1.5 舊模型)
+    const targetModel = 'gemini-3.1-pro-preview';
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -68,7 +44,7 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       const errData = await response.json().catch(() => ({}));
-      throw new Error(`[使用模型 ${targetModelName} 辨識失敗]: ${errData.error?.message || response.statusText}`);
+      throw new Error(`[${targetModel}] 呼叫失敗 (${response.status}): ${errData.error?.message || response.statusText}`);
     }
 
     const data = await response.json();
