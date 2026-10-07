@@ -32,8 +32,8 @@ export default async function handler(req, res) {
       }]
     };
 
-    // 使用 Google 官方最穩定且相容性最高的標準模型
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // 採用 Google API 官方最新正式發布模型
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
       method: "POST",
@@ -49,7 +49,6 @@ export default async function handler(req, res) {
     const data = await response.json();
     let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     
-    // 清理 JSON 字串
     const jsonStart = rawText.indexOf('{');
     const jsonEnd = rawText.lastIndexOf('}');
     if (jsonStart !== -1 && jsonEnd !== -1) {
