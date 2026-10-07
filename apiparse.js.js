@@ -23,6 +23,33 @@ export default async function handler(req, res) {
   "vendor": "廠商名稱"
 }`;
 
+    // 步驟 1: 動態向 Google 查詢此 API Key 目前所有可用的模型
+    const listModelsUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    const listRes = await fetch(listModelsUrl);
+    if (!listRes.ok) {
+      const errData = await listRes.json().catch(() => ({}));
+      throw new Error(`無法取得模型清單: ${errData.error?.message || listRes.statusText}，請檢查 API Key 是否正確。`);
+    }
+
+    const listData = await listRes.json();
+    const availableModels = listData.models || [];
+    
+    // 找出支援 generateContent 的模型（優先選擇名稱含有 flash 或 pro 的模型）
+    const validModel = availableModels.find(m => 
+      m.supportedGenerationMethods && 
+      m.supportedGenerationMethods.includes('generateContent') &&
+      !m.name.includes('embedding') &&
+      !m.name.includes('imagen')
+    );
+
+    if (!validModel) {
+      throw new Error("此 API Key 目前沒有可用於生成內容的 Gemini 模型。");
+    }
+
+    // 格式範例: "models/gemini-3.5-flash" ➔ 取出 "gemini-3.5-flash"
+    const targetModelName = validModel.name.replace('models/', '');
+
+    // 步驟 2: 使用動態取得的最佳模型名稱發送辨識請求
     const payload = {
       contents: [{
         parts: [
@@ -32,43 +59,29 @@ export default async function handler(req, res) {
       }]
     };
 
-    // 使用官方最新別名與現行正式模型名單 (自動指派目前最新模型)
-    const models = [
-      'gemini-flash-latest',
-      'gemini-3.8-flash',
-      'gemini-3.6-flash'
-    ];
-    let lastError = null;
+    const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${targetModelName}:generateContent?key=${apiKey}`;
+    const response = await fetch(generateUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
 
-    for (let model of models) {
-      try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error?.message || `HTTP ${response.status}`);
-        }
-
-        const data = await response.json();
-        let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        const jsonStart = rawText.indexOf('{');
-        const jsonEnd = rawText.lastIndexOf('}');
-        if (jsonStart !== -1 && jsonEnd !== -1) {
-          rawText = rawText.substring(jsonStart, jsonEnd + 1);
-        }
-
-        return res.status(200).json(JSON.parse(rawText));
-      } catch (err) {
-        lastError = err;
-      }
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(`[使用模型 ${targetModelName} 辨識失敗]: ${errData.error?.message || response.statusText}`);
     }
 
-    throw lastError;
+    const data = await response.json();
+    let rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    
+    const jsonStart = rawText.indexOf('{');
+    const jsonEnd = rawText.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+      rawText = rawText.substring(jsonStart, jsonEnd + 1);
+    }
+
+    return res.status(200).json(JSON.parse(rawText));
+
   } catch (err) {
     return res.status(500).json({ error: err.message || "AI 辨識失敗" });
   }
