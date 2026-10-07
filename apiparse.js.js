@@ -32,11 +32,11 @@ export default async function handler(req, res) {
       }]
     };
 
-    // Google 官方 2026 年最新支援模型名單 (避開已停用的舊版模型)
+    // 使用官方最新別名與現行正式模型名單 (自動指派目前最新模型)
     const models = [
-      'gemini-3.1-pro-preview',
-      'gemini-3.5-flash',
-      'gemini-3-flash-preview'
+      'gemini-flash-latest',
+      'gemini-3.8-flash',
+      'gemini-3.6-flash'
     ];
     let lastError = null;
 
