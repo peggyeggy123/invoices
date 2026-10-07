@@ -32,7 +32,8 @@ export default async function handler(req, res) {
       }]
     };
 
-    const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+    // 使用目前 Gemini API 最新的正式模型名稱
+    const models = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
     let lastError = null;
 
     for (let model of models) {
